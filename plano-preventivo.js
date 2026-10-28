@@ -48,6 +48,14 @@ function lerRegistros(aba) {
         dataCadastro: dataExcel(linha["DATA CADASTRO"]),
         dataInicio: dataExcel(linha["DATA INICIO"]),
         dataFinal: dataExcel(linha["DATA FINAL"]),
+        endereco: String(
+            linha["Endereço"] ?? linha["ENDEREÇO"] ??
+            linha["Endereco"] ?? linha["ENDERECO"] ?? ""
+        ).trim(),
+        numero: String(
+            linha["Número"] ?? linha["NÚMERO"] ??
+            linha["Numero"] ?? linha["NUMERO"] ?? ""
+        ).trim(),
         tipo: String(linha.TIPO ?? "").trim(),
         status: String(linha.STATUS ?? "").trim(),
         fibras: (() => {
@@ -329,6 +337,9 @@ function selecionarDia(chave, itens) {
             return `<article class="item-agenda item-${tipoStatus}">
                 <strong>${escaparHtml(item.at || "AT não informada")} · ${escaparHtml(item.tipo || "Tipo não informado")}</strong>
                 <span>Início: ${dataBr(item.dataInicio)} | Final: ${dataBr(item.dataFinal)}</span>
+                <span class="item-endereco"><strong>Endereço:</strong> ${escaparHtml(
+                    [item.endereco, item.numero].filter(Boolean).join(", ") || "Não informado"
+                )}</span>
                 <span class="status-detalhe">Status: ${rotulo}</span>
                 <span class="item-fibras">Fibras: <strong>${item.fibras ?? "Não informado"}</strong></span>
             </article>`;
