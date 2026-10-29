@@ -251,8 +251,13 @@ function atualizarAgenda() {
 
     document.getElementById("totalAgendaMes").textContent = agendadosMes.length;
     document.getElementById("legendaAgendaMes").textContent = mesTitulo(ano, mes);
+    const totalExecucao = registrosPorAt().filter(item =>
+        normalizarTexto(item.status) === "EXECUCAO"
+    ).length;
+
     document.getElementById("totalAgendaFutura").textContent = futuros.length;
     document.getElementById("legendaAgendaFutura").textContent = `Após ${dataBr(fimMes)}`;
+    document.getElementById("totalExecucao").textContent = totalExecucao;
     montarCalendario(ano, mes, itensDoCalendario(ano, mes));
 }
 
