@@ -38,3 +38,8 @@
     color: #2e0a5e;
     font-size: 11px;
 }
+
+/* Consolidação final: três filtros, gráfico reduzido, feriados e endereço */
+.controles{grid-template-columns:.85fr 1.15fr .9fr}
+.grafico-container{height:198px;padding:10px 24px 14px}
+.dia-calendario.dia-feriado{background:#fff5f5;box-shadow:inset 0 0 0 1px #efb1b1}.dia-calendario.dia-feriado.com-agenda{background:linear-gradient(135deg,#fff5f5 0 32%,#f1e7fb 32% 100%)}.badge-feriado{display:block;width:max-content;max-width:100%;margin-top:5px;padding:4px 7px;color:#a10f25;background:#ffe5e9;border:1px solid #ee9cab;border-radius:999px;font-size:10px;font-weight:850}.selecionado .badge-feriado{color:#fff;background:#c6283d;border-color:#fff}.item-feriado{margin-bottom:12px;padding:13px 14px;border-left:4px solid #c6283d;background:#fff2f4;border-radius:10px}.item-feriado-rotulo{display:block;margin-bottom:5px;color:#c6283d;font-size:10px;font-weight:850;text-transform:uppercase}.item-feriado strong{display:block;color:#7c1020;font-size:14px}.item-feriado span:last-child{display:block;margin-top:5px;color:#7a5a60;font-size:11px}

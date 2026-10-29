@@ -3,118 +3,155 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plano Preventivo</title>
-    <link rel="stylesheet" href="plano-preventivo.css">
+    <title>Produtividade dos Gestores</title>
+    <link rel="stylesheet" href="style.css">
+
+    <!-- Ajuste exclusivo da altura das linhas das tabelas -->
+    <style>
+        .tabela-indicador th {
+            height: 27px;
+            padding-top: 4px;
+            padding-bottom: 4px;
+        }
+
+        .tabela-indicador td {
+            height: 29px;
+            padding-top: 4px;
+            padding-bottom: 4px;
+        }
+
+        /* Botão de acesso ao painel Icomon */
+        .btn-painel-icomon {
+            width: 230px;
+            height: 42px;
+            padding: 0 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            background: linear-gradient(90deg, #5b1fa6, #7a3fe0);
+            border: 2px solid #5b1fa6;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 700;
+            text-align: center;
+            text-decoration: none;
+            white-space: nowrap;
+            cursor: pointer;
+            transition: all 0.25s ease;
+        }
+
+        .btn-painel-icomon:hover {
+            background: linear-gradient(90deg, #2e0a5e, #5b1fa6);
+            border-color: #2e0a5e;
+            transform: translateY(-1px);
+        }
+
+        .btn-painel-icomon:focus {
+            outline: none;
+            box-shadow: 0 0 0 4px rgba(122, 63, 224, 0.18);
+        }
+
+        @media (max-width: 840px) {
+            .btn-painel-icomon {
+                width: 100%;
+            }
+        }
+    </style>
 </head>
 <body>
     <header class="cabecalho">
-        <div class="logo"><img src="logo-vivo.png" alt="Logo Vivo"></div>
-        <div class="titulo">
-            <h1>Plano Preventivo</h1>
-            <p>Modernização | Concluídos e agenda</p>
+        <div class="logo">
+            <img src="logo-vivo.png" alt="Logo Vivo">
         </div>
-        <div class="atualizacao">Atualizado em<br><strong id="dataAtualizacao">Carregando...</strong></div>
+
+        <div class="titulo">
+            <h1>Produtividade dos Gestores</h1>
+            <p>Acompanhamento Operacional</p>
+        </div>
+
+        <div class="data">
+            Atualizado em<br>
+            <span id="data-atualizacao">Carregando...</span>
+        </div>
     </header>
 
     <main>
-        <section class="controles" aria-label="Filtros do painel">
-            <div class="campo">
-                <label for="filtroAno">Ano</label>
-                <select id="filtroAno"></select>
-            </div>
-            <div class="campo">
-                <label for="filtroAt">AT</label>
-                <select id="filtroAt"><option value="TODAS">Todas</option></select>
-            </div>
-            <div class="campo">
-                <label for="filtroData">Data dos concluídos</label>
-                <input id="filtroData" type="date">
-            </div>
-            <button id="btnTelaCheia" class="botao" type="button">Tela cheia</button>
-        </section>
-
-        <section class="cards-resumo" aria-label="Resumo de concluídos e agendas">
-            <article class="card-resumo">
-                <span>Concluídos no ano</span>
-                <strong id="totalAno">0</strong>
-                <small id="legendaAno">Ano selecionado</small>
-            </article>
-            <article class="card-resumo">
-                <span>Concluídos no mês atual</span>
-                <strong id="totalMesAtual">0</strong>
-                <small id="legendaMesAtual">Mês atual</small>
-            </article>
-            <article class="card-resumo card-resumo-agenda">
-                <span>Agendas consolidadas</span>
-                <strong id="totalAgendasConsolidadas">0</strong>
-                <small>Casos únicos com status AGENDADO</small>
-            </article>
-        </section>
-        <section class="painel painel-evolucao">
-            <header class="painel-titulo">
-                <div><span class="sobrelinha">Evolução mensal</span><h2>Modernizações concluídas</h2></div>
-            </header>
-            <div class="grafico-container"><canvas id="graficoEvolucao"></canvas></div>
-        </section>
-
-        <section class="painel painel-agenda">
-            <header class="painel-titulo agenda-cabecalho">
-                <div><span class="sobrelinha">Agenda</span><h2>Modernizações agendadas</h2></div>
-                <div class="campo campo-mes-agenda">
-                    <label for="filtroMesAgenda">Mês da agenda</label>
-                    <input id="filtroMesAgenda" type="month">
-                </div>
-            </header>
-
-            <div class="filtros-status" aria-label="Status exibidos no calendário">
-                <span>Exibir no calendário:</span>
-                <label><input id="exibirAgendado" type="checkbox" checked> <i class="legenda-status legenda-agendado"></i>Agendado</label>
-                <label><input id="exibirExecucao" type="checkbox" checked> <i class="legenda-status legenda-execucao"></i>Execução</label>
-                <label><input id="exibirServicoOk" type="checkbox" checked> <i class="legenda-status legenda-ok"></i>Serviço OK</label>
+        <section class="filtros-container" aria-label="Filtros do painel">
+            <div class="filtro-group">
+                <label for="mesSelecionado">Selecione o mês</label>
+                <select id="mesSelecionado">
+                    <option value="0">Todos</option>
+                    <option value="1">Janeiro</option>
+                    <option value="2">Fevereiro</option>
+                    <option value="3">Março</option>
+                    <option value="4">Abril</option>
+                    <option value="5">Maio</option>
+                    <option value="6">Junho</option>
+                    <option value="7">Julho</option>
+                    <option value="8">Agosto</option>
+                    <option value="9">Setembro</option>
+                    <option value="10" selected>Outubro</option>
+                    <option value="11">Novembro</option>
+                    <option value="12">Dezembro</option>
+                </select>
             </div>
 
-            <div class="cards-agenda">
-                <article class="card-agenda">
-                    <span>Agenda do mês</span>
-                    <strong id="totalAgendaMes">0</strong>
-                    <small id="legendaAgendaMes">Mês selecionado</small>
-                </article>
-                <article class="card-agenda card-agenda-futura">
-                    <span>Agenda futura</span>
-                    <strong id="totalAgendaFutura">0</strong>
-                    <small id="legendaAgendaFutura">Após o mês selecionado</small>
-                </article>
+            <div class="filtro-group">
+                <label for="filtroData">Selecione a data</label>
+                <select id="filtroData"></select>
             </div>
 
-            <div class="agenda-layout">
-                <section class="calendario-bloco">
-                    <div class="calendario-topo">
-                        <button id="mesAnterior" type="button" aria-label="Mês anterior">‹</button>
-                        <h3 id="tituloCalendario">Mês</h3>
-                        <button id="mesSeguinte" type="button" aria-label="Próximo mês">›</button>
-                    </div>
-                    <div class="calendario-semana" aria-hidden="true">
-                        <span>DOM</span><span>SEG</span><span>TER</span><span>QUA</span><span>QUI</span><span>SEX</span><span>SÁB</span>
-                    </div>
-                    <div id="calendario" class="calendario" aria-label="Calendário de casos agendados"></div>
-                </section>
+            <div class="filtro-group">
+                <label for="filtroGestor">Selecione o gestor</label>
+                <select id="filtroGestor">
+                    <option value="">Selecione...</option>
+                </select>
+            </div>
 
-                <aside class="agenda-detalhe">
-                    <div class="agenda-detalhe-titulo">
-                        <span class="sobrelinha">Detalhamento</span>
-                        <h3 id="tituloDetalheAgenda">Selecione um dia</h3>
-                    </div>
-                    <div id="listaAgenda" class="lista-agenda">
-                        <p class="estado-vazio">Clique em uma data com agenda para visualizar os casos.</p>
-                    </div>
-                </aside>
+            <div class="filtro-group">
+                <label for="btnFullscreen">Tela cheia</label>
+                <button
+                    id="btnFullscreen"
+                    class="btn-filtro"
+                    type="button"
+                    title="Alternar tela cheia"
+                >
+                    🖥️
+                </button>
+            </div>
+
+            <div class="filtro-group">
+                <label for="btnPainelIcomon">Painéis</label>
+                <a
+                    id="btnPainelIcomon"
+                    class="btn-painel-icomon"
+                    href="rit-icomon.html"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title="Abrir o painel Lançamento de RIT - Icomon"
+                >
+                    Lançamento de RIT - Icomon
+                </a>
             </div>
         </section>
+
+        <section
+            id="cardsIndicadores"
+            class="cards"
+            aria-label="Totais dos indicadores"
+        ></section>
+
+        <section
+            id="gradePaineis"
+            class="grade-paineis"
+            aria-label="Indicadores por gestor"
+        ></section>
     </main>
 
     <div id="mensagemErro" class="mensagem-erro" hidden></div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-    <script src="plano-preventivo.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>
