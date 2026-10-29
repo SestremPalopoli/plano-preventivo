@@ -48,6 +48,14 @@ function lerRegistros(aba) {
         dataCadastro: dataExcel(linha["DATA CADASTRO"]),
         dataInicio: dataExcel(linha["DATA INICIO"]),
         dataFinal: dataExcel(linha["DATA FINAL"]),
+        endereco: String(
+            linha["Endereço"] ?? linha["ENDEREÇO"] ??
+            linha["Endereco"] ?? linha["ENDERECO"] ?? ""
+        ).trim(),
+        numero: String(
+            linha["Número"] ?? linha["NÚMERO"] ??
+            linha["Numero"] ?? linha["NUMERO"] ?? ""
+        ).trim(),
         tipo: String(linha.TIPO ?? "").trim(),
         status: String(linha.STATUS ?? "").trim(),
         fibras: (() => {
@@ -85,15 +93,14 @@ function preencherFiltros() {
     ats.forEach(at => filtroAt.add(new Option(at, at)));
 
     const ultimaData = datas.sort((a, b) => b - a)[0] || new Date();
-    document.getElementById("filtroData").value = dataIso(ultimaData);
     const hoje = new Date();
     document.getElementById("filtroMesAgenda").value = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function atualizarResumo() {
     const ano = Number(document.getElementById("filtroAno").value);
-    const dataEscolhida = dataExcel(document.getElementById("filtroData").value);
     const concluidos = somenteConcluidos(registrosPorAt());
+    const dataEscolhida = concluidos.map(item => item.dataFinal).sort((a, b) => b - a)[0] || new Date();
     const agendados = somenteAgendados(registrosPorAt());
     const doAno = concluidos.filter(item => item.dataFinal.getFullYear() === ano);
     const porMes = Array.from({ length: 12 }, (_, mes) =>
@@ -106,12 +113,11 @@ function atualizarResumo() {
         item.dataFinal.getMonth() === referenciaMes.getMonth()
     ).length;
 
+    document.getElementById("tituloConcluidosAno").textContent = "Concluídos";
     document.getElementById("totalAno").textContent = doAno.length;
-    document.getElementById("legendaAno").textContent = ano;
     document.getElementById("totalMesAtual").textContent = totalMesAtual;
     document.getElementById("legendaMesAtual").textContent = referenciaMes.toLocaleDateString("pt-BR", {
-        month: "long",
-        year: "numeric"
+        month: "long"
     });
     document.getElementById("totalAgendasConsolidadas").textContent = agendados.length;
     montarGrafico(ano, porMes);
@@ -255,9 +261,39 @@ function adicionarAoMapa(mapa, chave, item) {
     mapa.get(chave).push(item);
 }
 
+function calcularPascoa(ano) {
+    const a = ano % 19, b = Math.floor(ano / 100), c = ano % 100;
+    const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const mes = Math.floor((h + l - 7 * m + 114) / 31);
+    const dia = ((h + l - 7 * m + 114) % 31) + 1;
+    return new Date(ano, mes - 1, dia);
+}
+function obterFeriados(ano) {
+    const pascoa = calcularPascoa(ano);
+    const paixao = new Date(pascoa); paixao.setDate(pascoa.getDate() - 2);
+    const lista = [
+        [new Date(ano,0,1),"Confraternização Universal","Nacional"],
+        [paixao,"Paixão de Cristo","Nacional"],
+        [new Date(ano,3,21),"Tiradentes","Nacional"],
+        [new Date(ano,4,1),"Dia Mundial do Trabalho","Nacional"],
+        [new Date(ano,6,9),"Revolução Constitucionalista de 1932 - Data Magna do Estado de São Paulo","Estadual - São Paulo"],
+        [new Date(ano,8,7),"Independência do Brasil","Nacional"],
+        [new Date(ano,9,12),"Nossa Senhora Aparecida","Nacional"],
+        [new Date(ano,10,2),"Finados","Nacional"],
+        [new Date(ano,10,15),"Proclamação da República","Nacional"],
+        [new Date(ano,10,20),"Dia Nacional de Zumbi e da Consciência Negra","Nacional"],
+        [new Date(ano,11,25),"Natal","Nacional"]
+    ];
+    return new Map(lista.map(([data,nome,abrangencia]) => [dataIso(data),{data,nome,abrangencia}]));
+}
+
 function montarCalendario(ano, mes, itensMes) {
     document.getElementById("tituloCalendario").textContent = mesTitulo(ano, mes);
     const mapa = new Map();
+    const feriados = obterFeriados(ano);
     const inicioMes = new Date(ano, mes - 1, 1);
     const fimMes = new Date(ano, mes, 0);
 
@@ -287,41 +323,50 @@ function montarCalendario(ano, mes, itensMes) {
         data.setDate(inicio.getDate() + i);
         const chave = dataIso(data);
         const itens = mapa.get(chave) || [];
+        const feriado = feriados.get(chave) || null;
         const fora = data.getMonth() !== mes - 1;
         const contagens = { agendado: 0, execucao: 0, ok: 0 };
         itens.forEach(item => contagens[statusTipo(item)]++);
         const ats = [...new Set(itens.map(item => item.at))].join(" · ");
         const badges = [
+            feriado && !fora ? '<span class="badge-feriado">Feriado</span>' : "",
             contagens.agendado ? `<span class="badge-agenda badge-agendado">${contagens.agendado} agendado${contagens.agendado > 1 ? "s" : ""}</span>` : "",
             contagens.execucao ? `<span class="badge-agenda badge-execucao">${contagens.execucao} em execução</span>` : "",
             contagens.ok ? `<span class="badge-agenda badge-ok">${contagens.ok} serviço${contagens.ok > 1 ? "s" : ""} OK</span>` : ""
         ].join("");
 
-        celulas.push(`<button type="button" class="dia-calendario ${fora ? "fora-mes" : ""} ${itens.length ? "com-agenda" : ""} ${chave === dataAgendaSelecionada ? "selecionado" : ""} ${chave === hoje ? "hoje" : ""}" data-data="${chave}" ${itens.length ? "" : "disabled"}>
+        const interativo = itens.length > 0 || (feriado && !fora);
+        celulas.push(`<button type="button" class="dia-calendario ${fora ? "fora-mes" : ""} ${itens.length ? "com-agenda" : ""} ${feriado && !fora ? "dia-feriado" : ""} ${chave === dataAgendaSelecionada ? "selecionado" : ""} ${chave === hoje ? "hoje" : ""}" data-data="${chave}" data-interativo="${interativo}" ${interativo ? "" : "disabled"}>
             <span class="numero-dia">${data.getDate()}</span>${badges}
             ${itens.length ? `<span class="ats-dia">${escaparHtml(ats)}</span>` : ""}
         </button>`);
     }
 
     document.getElementById("calendario").innerHTML = celulas.join("");
-    document.querySelectorAll(".dia-calendario.com-agenda").forEach(botao =>
-        botao.addEventListener("click", () => selecionarDia(botao.dataset.data, mapa.get(botao.dataset.data) || []))
+    document.querySelectorAll('.dia-calendario[data-interativo="true"]').forEach(botao =>
+        botao.addEventListener("click", () => selecionarDia(botao.dataset.data, mapa.get(botao.dataset.data) || [], feriados.get(botao.dataset.data) || null))
     );
 
-    if (!itensMes.length) {
+    const feriadoSelecionado = feriados.get(dataAgendaSelecionada) || null;
+    const haFeriadoNoMes = [...feriados.values()].some(item =>
+        item.data.getFullYear() === ano && item.data.getMonth() === mes - 1
+    );
+
+    if (!itensMes.length && !haFeriadoNoMes) {
         document.getElementById("tituloDetalheAgenda").textContent = "Nenhum caso";
         document.getElementById("listaAgenda").innerHTML = `<p class="estado-vazio">Nenhum caso dos status selecionados em ${escaparHtml(mesTitulo(ano, mes))}.</p>`;
-    } else if (!mapa.has(dataAgendaSelecionada)) {
+    } else if (!mapa.has(dataAgendaSelecionada) && !feriadoSelecionado) {
         document.getElementById("tituloDetalheAgenda").textContent = "Selecione um dia";
-        document.getElementById("listaAgenda").innerHTML = '<p class="estado-vazio">Clique em uma data com ocorrências para visualizar os casos.</p>';
+        document.getElementById("listaAgenda").innerHTML = '<p class="estado-vazio">Clique em uma data com ocorrência ou feriado para visualizar os detalhes.</p>';
     }
 }
 
-function selecionarDia(chave, itens) {
+function selecionarDia(chave, itens, feriado = null) {
     dataAgendaSelecionada = chave;
     document.getElementById("tituloDetalheAgenda").textContent = `Ocorrências de ${dataBr(dataExcel(chave))}`;
     const ordem = { execucao: 1, agendado: 2, ok: 3 };
-    document.getElementById("listaAgenda").innerHTML = itens
+    const detalheFeriado = feriado ? `<article class="item-feriado"><span class="item-feriado-rotulo">Feriado</span><strong>${escaparHtml(feriado.nome)}</strong><span>${escaparHtml(feriado.abrangencia)}</span></article>` : "";
+    document.getElementById("listaAgenda").innerHTML = detalheFeriado + itens
         .sort((a, b) => ordem[statusTipo(a)] - ordem[statusTipo(b)] || a.at.localeCompare(b.at))
         .map(item => {
             const tipoStatus = statusTipo(item);
@@ -329,6 +374,9 @@ function selecionarDia(chave, itens) {
             return `<article class="item-agenda item-${tipoStatus}">
                 <strong>${escaparHtml(item.at || "AT não informada")} · ${escaparHtml(item.tipo || "Tipo não informado")}</strong>
                 <span>Início: ${dataBr(item.dataInicio)} | Final: ${dataBr(item.dataFinal)}</span>
+                <span class="item-endereco"><strong>Endereço:</strong> ${escaparHtml(
+                    [item.endereco, item.numero].filter(Boolean).join(", ") || "Não informado"
+                )}</span>
                 <span class="status-detalhe">Status: ${rotulo}</span>
                 <span class="item-fibras">Fibras: <strong>${item.fibras ?? "Não informado"}</strong></span>
             </article>`;
@@ -377,7 +425,6 @@ async function iniciar() {
 document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("filtroAno").addEventListener("change", atualizarResumo);
     document.getElementById("filtroAt").addEventListener("change", atualizarTudo);
-    document.getElementById("filtroData").addEventListener("change", atualizarResumo);
     document.getElementById("filtroMesAgenda").addEventListener("change", () => { dataAgendaSelecionada = ""; atualizarAgenda(); });
     document.getElementById("mesAnterior").addEventListener("click", () => mudarMesAgenda(-1));
     document.getElementById("mesSeguinte").addEventListener("click", () => mudarMesAgenda(1));
