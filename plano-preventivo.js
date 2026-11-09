@@ -236,26 +236,35 @@ function itensDoCalendario(ano, mes) {
 function atualizarAgenda() {
     const { ano, mes } = obterMesAgenda();
     if (!ano || !mes) return;
+
     const filtrados = registrosPorAt();
     const agendados = somenteAgendados(filtrados);
     const inicioMes = new Date(ano, mes - 1, 1);
     const fimMes = new Date(ano, mes, 0);
-    const inicioSeguinte = new Date(ano, mes, 1);
+
     const agendadosMes = agendados.filter(item => {
         const { inicio, fim } = intervaloItem(item);
         return inicio && fim && inicio <= fimMes && fim >= inicioMes;
     });
-    const futuros = agendados.filter(item => {
-        const { fim } = intervaloItem(item);
-        return fim && fim >= inicioSeguinte;
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    const agendadosHoje = agendados.filter(item => {
+        const { inicio, fim } = intervaloItem(item);
+        return inicio && fim && inicio <= hoje && fim >= hoje;
     });
-    const totalExecucao = filtrados.filter(item => statusTipo(item) === "execucao").length;
+
+    const totalExecucao = filtrados.filter(
+        item => statusTipo(item) === "execucao"
+    ).length;
 
     document.getElementById("totalAgendaMes").textContent = String(agendadosMes.length);
     document.getElementById("legendaAgendaMes").textContent = mesTitulo(ano, mes);
-    document.getElementById("totalAgendaFutura").textContent = String(futuros.length);
-    document.getElementById("legendaAgendaFutura").textContent = `Após ${dataBr(fimMes)}`;
+    document.getElementById("totalAgendaHoje").textContent = String(agendadosHoje.length);
+    document.getElementById("legendaAgendaHoje").textContent = dataBr(hoje);
     document.getElementById("totalExecucao").textContent = String(totalExecucao);
+
     montarCalendario(ano, mes, itensDoCalendario(ano, mes));
 }
 
