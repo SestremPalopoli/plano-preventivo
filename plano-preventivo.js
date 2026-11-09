@@ -8,63 +8,105 @@ let graficoEvolucao = null;
 let dataAgendaSelecionada = "";
 
 function normalizarTexto(valor) {
-    return String(valor ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().replace(/\s+/g, " ").toUpperCase();
+    return String(valor ?? "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .replace(/\s+/g, " ")
+        .toUpperCase();
 }
 
 function escaparHtml(valor) {
-    return String(valor ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+    return String(valor ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+}
+
+function dataValida(data) {
+    return data instanceof Date && !Number.isNaN(data.getTime());
+}
+
+function criarDataSegura(ano, mes, dia) {
+    const data = new Date(ano, mes - 1, dia);
+    return data.getFullYear() === ano && data.getMonth() === mes - 1 && data.getDate() === dia ? data : null;
 }
 
 function dataExcel(valor) {
-    if (valor instanceof Date && !Number.isNaN(valor.getTime())) return new Date(valor.getFullYear(), valor.getMonth(), valor.getDate());
+    if (dataValida(valor)) return new Date(valor.getFullYear(), valor.getMonth(), valor.getDate());
+
     if (typeof valor === "number" && Number.isFinite(valor)) {
         const partes = XLSX.SSF.parse_date_code(valor);
-        return partes ? new Date(partes.y, partes.m - 1, partes.d) : null;
+        return partes ? criarDataSegura(partes.y, partes.m, partes.d) : null;
     }
+
     const texto = String(valor ?? "").trim();
-    let match = texto.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-    if (match) return new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
-    match = texto.match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if (match) return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    if (!texto) return null;
+
+    let match = texto.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})(?:\s.*)?$/);
+    if (match) return criarDataSegura(Number(match[3]), Number(match[2]), Number(match[1]));
+
+    match = texto.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);
+    if (match) return criarDataSegura(Number(match[1]), Number(match[2]), Number(match[3]));
+
     return null;
 }
 
 function dataIso(data) {
-    if (!data) return "";
+    if (!dataValida(data)) return "";
     return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}-${String(data.getDate()).padStart(2, "0")}`;
 }
 
 function dataBr(data) {
-    return data ? data.toLocaleDateString("pt-BR") : "--";
+    return dataValida(data) ? data.toLocaleDateString("pt-BR") : "--";
 }
 
 function mesTitulo(ano, mes) {
     return new Date(ano, mes - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 }
 
+function obterCampo(linha, nomes) {
+    const mapa = new Map(Object.entries(linha).map(([chave, valor]) => [normalizarTexto(chave), valor]));
+    for (const nome of nomes) {
+        const chave = normalizarTexto(nome);
+        if (mapa.has(chave)) return mapa.get(chave);
+    }
+    return "";
+}
+
 function lerRegistros(aba) {
-    return XLSX.utils.sheet_to_json(aba, { defval: "", raw: true }).map(linha => ({
-        at: String(linha.AT ?? "").trim(),
-        dataCadastro: dataExcel(linha["DATA CADASTRO"]),
-        dataInicio: dataExcel(linha["DATA INICIO"]),
-        dataFinal: dataExcel(linha["DATA FINAL"]),
-        endereco: String(
-            linha["Endereço"] ?? linha["ENDEREÇO"] ??
-            linha["Endereco"] ?? linha["ENDERECO"] ?? ""
-        ).trim(),
-        numero: String(
-            linha["Número"] ?? linha["NÚMERO"] ??
-            linha["Numero"] ?? linha["NUMERO"] ?? ""
-        ).trim(),
-        tipo: String(linha.TIPO ?? "").trim(),
-        status: String(linha.STATUS ?? "").trim(),
-        fibras: (() => {
-            const valor = linha.Fibras ?? linha.FIBRAS ?? linha.fibras ?? "";
-            if (valor === "" || valor === null || valor === undefined || String(valor).trim() === "-") return null;
-            const numero = Number(String(valor).replace(",", "."));
-            return Number.isFinite(numero) ? numero : null;
-        })()
-    })).filter(item => item.at || item.dataFinal || item.status);
+    const linhas = XLSX.utils.sheet_to_json(aba, { defval: "", raw: true });
+
+    return linhas.map(linha => {
+        const valorFibras = obterCampo(linha, ["FIBRAS", "FIBRA", "QTDE FIBRAS", "QUANTIDADE DE FIBRAS"]);
+        let fibras = null;
+        if (valorFibras !== "" && valorFibras != null && String(valorFibras).trim() !== "-") {
+            const numero = Number(String(valorFibras).replace(/\./g, "").replace(",", "."));
+            fibras = Number.isFinite(numero) ? numero : null;
+        }
+
+        return {
+            at: String(obterCampo(linha, ["AT", "AREA TECNICA", "ÁREA TÉCNICA"])).trim(),
+            dataCadastro: dataExcel(obterCampo(linha, ["DATA CADASTRO", "DATA DE CADASTRO"])),
+            dataInicio: dataExcel(obterCampo(linha, ["DATA INICIO", "DATA INÍCIO", "DATA DE INICIO", "DATA DE INÍCIO"])),
+            dataFinal: dataExcel(obterCampo(linha, ["DATA FINAL", "DATA FIM", "DATA DE FINALIZACAO", "DATA DE FINALIZAÇÃO", "DATA CONCLUSAO", "DATA CONCLUSÃO"])),
+            endereco: String(obterCampo(linha, ["ENDERECO", "ENDEREÇO", "LOGRADOURO"])).trim(),
+            numero: String(obterCampo(linha, ["NUMERO", "NÚMERO", "Nº", "N°"])).trim(),
+            tipo: String(obterCampo(linha, ["TIPO", "TIPO DE SERVICO", "TIPO DE SERVIÇO"])).trim(),
+            status: String(obterCampo(linha, ["STATUS", "SITUACAO", "SITUAÇÃO"])).trim(),
+            fibras
+        };
+    }).filter(item => item.at || item.dataCadastro || item.dataInicio || item.dataFinal || item.status);
+}
+
+function statusTipo(item) {
+    const status = normalizarTexto(item.status);
+    if (["AGENDADO", "AGENDADA"].includes(status)) return "agendado";
+    if (["EXECUCAO", "EM EXECUCAO"].includes(status)) return "execucao";
+    if (["SERVICO OK", "CONCLUIDO", "CONCLUIDA", "FINALIZADO", "FINALIZADA"].includes(status)) return "ok";
+    return "";
 }
 
 function registrosPorAt(lista = registros) {
@@ -73,59 +115,57 @@ function registrosPorAt(lista = registros) {
 }
 
 function somenteConcluidos(lista = registros) {
-    return lista.filter(item => normalizarTexto(item.status) === "SERVICO OK" && item.dataFinal);
+    return lista.filter(item => statusTipo(item) === "ok" && item.dataFinal);
 }
 
 function somenteAgendados(lista = registros) {
-    return lista.filter(item => normalizarTexto(item.status) === "AGENDADO" && item.dataFinal);
+    return lista.filter(item => statusTipo(item) === "agendado" && (item.dataInicio || item.dataFinal));
 }
 
 function preencherFiltros() {
-    const datas = registros.map(item => item.dataFinal).filter(Boolean);
+    const datas = registros.flatMap(item => [item.dataFinal, item.dataInicio]).filter(dataValida);
     const anos = [...new Set(datas.map(data => data.getFullYear()))].sort((a, b) => b - a);
     const filtroAno = document.getElementById("filtroAno");
-    anos.forEach(ano => filtroAno.add(new Option(ano, ano)));
+    filtroAno.innerHTML = "";
+    if (!anos.length) anos.push(new Date().getFullYear());
+    anos.forEach(ano => filtroAno.add(new Option(String(ano), String(ano))));
     const anoAtual = new Date().getFullYear();
-    filtroAno.value = anos.includes(anoAtual) ? anoAtual : anos[0] ?? anoAtual;
+    filtroAno.value = String(anos.includes(anoAtual) ? anoAtual : anos[0]);
 
-    const ats = [...new Set(registros.map(item => item.at).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
     const filtroAt = document.getElementById("filtroAt");
-    ats.forEach(at => filtroAt.add(new Option(at, at)));
+    filtroAt.innerHTML = '<option value="TODAS">Todas</option>';
+    [...new Set(registros.map(item => item.at).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, "pt-BR"))
+        .forEach(at => filtroAt.add(new Option(at, at)));
 
-    const ultimaData = datas.sort((a, b) => b - a)[0] || new Date();
-    const hoje = new Date();
-    document.getElementById("filtroMesAgenda").value = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, "0")}`;
+    const referencias = registros
+        .flatMap(item => [item.dataInicio, item.dataFinal])
+        .filter(dataValida)
+        .sort((a, b) => b - a);
+    const referencia = referencias[0] || new Date();
+    document.getElementById("filtroMesAgenda").value = `${referencia.getFullYear()}-${String(referencia.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function atualizarResumo() {
     const ano = Number(document.getElementById("filtroAno").value);
-    const concluidos = somenteConcluidos(registrosPorAt());
-    const dataEscolhida = concluidos.map(item => item.dataFinal).sort((a, b) => b - a)[0] || new Date();
-    const agendados = somenteAgendados(registrosPorAt());
+    const filtrados = registrosPorAt();
+    const concluidos = somenteConcluidos(filtrados);
     const doAno = concluidos.filter(item => item.dataFinal.getFullYear() === ano);
-    const porMes = Array.from({ length: 12 }, (_, mes) =>
-        doAno.filter(item => item.dataFinal.getMonth() === mes).length
-    );
+    const porMes = Array.from({ length: 12 }, (_, mes) => doAno.filter(item => item.dataFinal.getMonth() === mes).length);
+    const ultimaConclusaoNoAno = doAno.map(item => item.dataFinal).sort((a, b) => b - a)[0];
+    const referenciaMes = ultimaConclusaoNoAno || new Date(ano, new Date().getMonth(), 1);
+    const totalMesAtual = doAno.filter(item => item.dataFinal.getMonth() === referenciaMes.getMonth()).length;
+    const agendaConsolidada = filtrados.filter(item => ["agendado", "execucao"].includes(statusTipo(item)) && (item.dataInicio || item.dataFinal));
 
-    const referenciaMes = dataEscolhida || new Date();
-    const totalMesAtual = concluidos.filter(item =>
-        item.dataFinal.getFullYear() === referenciaMes.getFullYear() &&
-        item.dataFinal.getMonth() === referenciaMes.getMonth()
-    ).length;
-
-    document.getElementById("tituloConcluidosAno").textContent = "Concluídos";
-    document.getElementById("totalAno").textContent = doAno.length;
-    document.getElementById("totalMesAtual").textContent = totalMesAtual;
-    document.getElementById("legendaMesAtual").textContent = referenciaMes.toLocaleDateString("pt-BR", {
-        month: "long"
-    });
-    document.getElementById("totalAgendasConsolidadas").textContent = agendados.length;
+    document.getElementById("totalAno").textContent = String(doAno.length);
+    document.getElementById("totalMesAtual").textContent = String(totalMesAtual);
+    document.getElementById("legendaMesAtual").textContent = referenciaMes.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+    document.getElementById("totalAgendasConsolidadas").textContent = String(agendaConsolidada.length);
     montarGrafico(ano, porMes);
 }
 
 function montarGrafico(ano, valores) {
     graficoEvolucao?.destroy();
-
     const rotulosValores = {
         id: "rotulosValores",
         afterDatasetsDraw(chart) {
@@ -136,11 +176,9 @@ function montarGrafico(ano, valores) {
             ctx.font = '800 12px "Segoe UI", Arial, sans-serif';
             ctx.textAlign = "center";
             ctx.textBaseline = "bottom";
-
             meta.data.forEach((ponto, indice) => {
                 const valor = Number(chart.data.datasets[0].data[indice]) || 0;
-                const y = Math.max(chart.chartArea.top + 15, ponto.y - 11);
-                ctx.fillText(String(valor), ponto.x, y);
+                ctx.fillText(String(valor), ponto.x, Math.max(chart.chartArea.top + 15, ponto.y - 11));
             });
             ctx.restore();
         }
@@ -151,74 +189,35 @@ function montarGrafico(ano, valores) {
         plugins: [rotulosValores],
         data: {
             labels: ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"],
-            datasets: [{
-                label: `Concluídos em ${ano}`,
-                data: valores,
-                borderColor: "#5b1fa6",
-                backgroundColor: "#5b1fa622",
-                borderWidth: 3,
-                pointRadius: 5,
-                pointHoverRadius: 7,
-                pointBackgroundColor: "#7a3fe0",
-                pointBorderColor: "#5b1fa6",
-                pointBorderWidth: 2,
-                tension: .3,
-                fill: true
-            }]
+            datasets: [{ label: `Concluídos em ${ano}`, data: valores, borderColor: "#5b1fa6", backgroundColor: "#5b1fa622", borderWidth: 3, pointRadius: 5, pointHoverRadius: 7, pointBackgroundColor: "#7a3fe0", pointBorderColor: "#5b1fa6", pointBorderWidth: 2, tension: .3, fill: true }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             interaction: { intersect: false, mode: "index" },
-            layout: {
-                padding: { top: 25, right: 16, bottom: 8, left: 16 }
-            },
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    displayColors: false,
-                    callbacks: {
-                        label: contexto => `${contexto.parsed.y} concluído${contexto.parsed.y === 1 ? "" : "s"}`
-                    }
-                }
-            },
-            scales: {
-                x: {
-                    offset: true,
-                    grid: { drawBorder: false },
-                    ticks: { padding: 10 }
-                },
-                y: {
-                    beginAtZero: true,
-                    suggestedMax: Math.max(4, ...valores) + 3,
-                    ticks: { precision: 0, padding: 8 },
-                    grid: { drawBorder: false }
-                }
-            }
+            layout: { padding: { top: 25, right: 16, bottom: 8, left: 16 } },
+            plugins: { legend: { display: false }, tooltip: { displayColors: false, callbacks: { label: contexto => `${contexto.parsed.y} concluído${contexto.parsed.y === 1 ? "" : "s"}` } } },
+            scales: { x: { offset: true, grid: { drawBorder: false }, ticks: { padding: 10 } }, y: { beginAtZero: true, suggestedMax: Math.max(4, ...valores) + 3, ticks: { precision: 0, padding: 8 }, grid: { drawBorder: false } } }
         }
     });
 }
 
 function obterMesAgenda() {
-    const [ano, mes] = document.getElementById("filtroMesAgenda").value.split("-").map(Number);
+    const valor = document.getElementById("filtroMesAgenda").value;
+    if (!/^\d{4}-\d{2}$/.test(valor)) return { ano: 0, mes: 0 };
+    const [ano, mes] = valor.split("-").map(Number);
     return { ano, mes };
 }
 
-function statusTipo(item) {
-    const status = normalizarTexto(item.status);
-    if (status === "AGENDADO") return "agendado";
-    if (status === "EXECUCAO") return "execucao";
-    if (status === "SERVICO OK") return "ok";
-    return "";
+function statusHabilitado(tipo) {
+    const mapa = { agendado: "exibirAgendado", execucao: "exibirExecucao", ok: "exibirServicoOk" };
+    return Boolean(mapa[tipo] && document.getElementById(mapa[tipo]).checked);
 }
 
-function statusHabilitado(tipo) {
-    const mapa = {
-        agendado: "exibirAgendado",
-        execucao: "exibirExecucao",
-        ok: "exibirServicoOk"
-    };
-    return mapa[tipo] && document.getElementById(mapa[tipo]).checked;
+function intervaloItem(item) {
+    const fim = item.dataFinal || item.dataInicio;
+    const inicio = item.dataInicio || fim;
+    return { inicio, fim };
 }
 
 function itensDoCalendario(ano, mes) {
@@ -226,38 +225,37 @@ function itensDoCalendario(ano, mes) {
     const fimMes = new Date(ano, mes, 0);
     return registrosPorAt().filter(item => {
         const tipo = statusTipo(item);
-        if (!tipo || !statusHabilitado(tipo) || !item.dataFinal) return false;
-        if (tipo === "ok") {
-            return item.dataFinal >= inicioMes && item.dataFinal <= fimMes;
-        }
-        const inicio = item.dataInicio || item.dataFinal;
-        return inicio <= fimMes && item.dataFinal >= inicioMes;
+        if (!tipo || !statusHabilitado(tipo)) return false;
+        const { inicio, fim } = intervaloItem(item);
+        if (!inicio || !fim) return false;
+        if (tipo === "ok") return fim >= inicioMes && fim <= fimMes;
+        return inicio <= fimMes && fim >= inicioMes;
     });
 }
 
 function atualizarAgenda() {
     const { ano, mes } = obterMesAgenda();
     if (!ano || !mes) return;
-
-    const agendados = somenteAgendados(registrosPorAt());
-    const inicioSeguinte = new Date(ano, mes, 1);
+    const filtrados = registrosPorAt();
+    const agendados = somenteAgendados(filtrados);
     const inicioMes = new Date(ano, mes - 1, 1);
     const fimMes = new Date(ano, mes, 0);
+    const inicioSeguinte = new Date(ano, mes, 1);
     const agendadosMes = agendados.filter(item => {
-        const inicio = item.dataInicio || item.dataFinal;
-        return inicio <= fimMes && item.dataFinal >= inicioMes;
+        const { inicio, fim } = intervaloItem(item);
+        return inicio && fim && inicio <= fimMes && fim >= inicioMes;
     });
-    const futuros = agendados.filter(item => item.dataFinal >= inicioSeguinte);
+    const futuros = agendados.filter(item => {
+        const { fim } = intervaloItem(item);
+        return fim && fim >= inicioSeguinte;
+    });
+    const totalExecucao = filtrados.filter(item => statusTipo(item) === "execucao").length;
 
-    document.getElementById("totalAgendaMes").textContent = agendadosMes.length;
+    document.getElementById("totalAgendaMes").textContent = String(agendadosMes.length);
     document.getElementById("legendaAgendaMes").textContent = mesTitulo(ano, mes);
-    const totalExecucao = registrosPorAt().filter(item =>
-        normalizarTexto(item.status) === "EXECUCAO"
-    ).length;
-
-    document.getElementById("totalAgendaFutura").textContent = futuros.length;
+    document.getElementById("totalAgendaFutura").textContent = String(futuros.length);
     document.getElementById("legendaAgendaFutura").textContent = `Após ${dataBr(fimMes)}`;
-    document.getElementById("totalExecucao").textContent = totalExecucao;
+    document.getElementById("totalExecucao").textContent = String(totalExecucao);
     montarCalendario(ano, mes, itensDoCalendario(ano, mes));
 }
 
@@ -276,23 +274,19 @@ function calcularPascoa(ano) {
     const dia = ((h + l - 7 * m + 114) % 31) + 1;
     return new Date(ano, mes - 1, dia);
 }
+
 function obterFeriados(ano) {
     const pascoa = calcularPascoa(ano);
     const paixao = new Date(pascoa); paixao.setDate(pascoa.getDate() - 2);
     const lista = [
-        [new Date(ano,0,1),"Confraternização Universal","Nacional"],
-        [paixao,"Paixão de Cristo","Nacional"],
-        [new Date(ano,3,21),"Tiradentes","Nacional"],
-        [new Date(ano,4,1),"Dia Mundial do Trabalho","Nacional"],
-        [new Date(ano,6,9),"Revolução Constitucionalista de 1932 - Data Magna do Estado de São Paulo","Estadual - São Paulo"],
-        [new Date(ano,8,7),"Independência do Brasil","Nacional"],
-        [new Date(ano,9,12),"Nossa Senhora Aparecida","Nacional"],
-        [new Date(ano,10,2),"Finados","Nacional"],
-        [new Date(ano,10,15),"Proclamação da República","Nacional"],
-        [new Date(ano,10,20),"Dia Nacional de Zumbi e da Consciência Negra","Nacional"],
-        [new Date(ano,11,25),"Natal","Nacional"]
+        [new Date(ano, 0, 1), "Confraternização Universal", "Nacional"], [paixao, "Paixão de Cristo", "Nacional"],
+        [new Date(ano, 3, 21), "Tiradentes", "Nacional"], [new Date(ano, 4, 1), "Dia Mundial do Trabalho", "Nacional"],
+        [new Date(ano, 6, 9), "Revolução Constitucionalista de 1932", "Estadual - São Paulo"],
+        [new Date(ano, 8, 7), "Independência do Brasil", "Nacional"], [new Date(ano, 9, 12), "Nossa Senhora Aparecida", "Nacional"],
+        [new Date(ano, 10, 2), "Finados", "Nacional"], [new Date(ano, 10, 15), "Proclamação da República", "Nacional"],
+        [new Date(ano, 10, 20), "Dia Nacional de Zumbi e da Consciência Negra", "Nacional"], [new Date(ano, 11, 25), "Natal", "Nacional"]
     ];
-    return new Map(lista.map(([data,nome,abrangencia]) => [dataIso(data),{data,nome,abrangencia}]));
+    return new Map(lista.map(([data, nome, abrangencia]) => [dataIso(data), { data, nome, abrangencia }]));
 }
 
 function montarCalendario(ano, mes, itensMes) {
@@ -304,59 +298,51 @@ function montarCalendario(ano, mes, itensMes) {
 
     itensMes.forEach(item => {
         const tipo = statusTipo(item);
+        const { inicio, fim } = intervaloItem(item);
+        if (!inicio || !fim) return;
         if (tipo === "ok") {
-            adicionarAoMapa(mapa, dataIso(item.dataFinal), item);
+            adicionarAoMapa(mapa, dataIso(fim), item);
             return;
         }
-        const inicioItem = item.dataInicio || item.dataFinal;
-        const inicioVisivel = inicioItem < inicioMes ? new Date(inicioMes) : new Date(inicioItem);
-        const fimVisivel = item.dataFinal > fimMes ? new Date(fimMes) : new Date(item.dataFinal);
-        const cursor = new Date(inicioVisivel);
-        while (cursor <= fimVisivel) {
+        const inicioVisivel = inicio < inicioMes ? new Date(inicioMes) : new Date(inicio);
+        const fimVisivel = fim > fimMes ? new Date(fimMes) : new Date(fim);
+        for (const cursor = new Date(inicioVisivel); cursor <= fimVisivel; cursor.setDate(cursor.getDate() + 1)) {
             adicionarAoMapa(mapa, dataIso(cursor), item);
-            cursor.setDate(cursor.getDate() + 1);
         }
     });
 
     const primeiro = new Date(ano, mes - 1, 1);
-    const inicio = new Date(ano, mes - 1, 1 - primeiro.getDay());
+    const inicioGrade = new Date(ano, mes - 1, 1 - primeiro.getDay());
     const hoje = dataIso(new Date());
     const celulas = [];
 
     for (let i = 0; i < 42; i++) {
-        const data = new Date(inicio);
-        data.setDate(inicio.getDate() + i);
+        const data = new Date(inicioGrade);
+        data.setDate(inicioGrade.getDate() + i);
         const chave = dataIso(data);
         const itens = mapa.get(chave) || [];
         const feriado = feriados.get(chave) || null;
         const fora = data.getMonth() !== mes - 1;
         const contagens = { agendado: 0, execucao: 0, ok: 0 };
-        itens.forEach(item => contagens[statusTipo(item)]++);
-        const ats = [...new Set(itens.map(item => item.at))].join(" · ");
+        itens.forEach(item => { const tipo = statusTipo(item); if (tipo) contagens[tipo]++; });
+        const ats = [...new Set(itens.map(item => item.at).filter(Boolean))].join(" · ");
         const badges = [
             feriado && !fora ? '<span class="badge-feriado">Feriado</span>' : "",
             contagens.agendado ? `<span class="badge-agenda badge-agendado">${contagens.agendado} agendado${contagens.agendado > 1 ? "s" : ""}</span>` : "",
             contagens.execucao ? `<span class="badge-agenda badge-execucao">${contagens.execucao} em execução</span>` : "",
             contagens.ok ? `<span class="badge-agenda badge-ok">${contagens.ok} serviço${contagens.ok > 1 ? "s" : ""} OK</span>` : ""
         ].join("");
-
-        const interativo = itens.length > 0 || (feriado && !fora);
-        celulas.push(`<button type="button" class="dia-calendario ${fora ? "fora-mes" : ""} ${itens.length ? "com-agenda" : ""} ${feriado && !fora ? "dia-feriado" : ""} ${chave === dataAgendaSelecionada ? "selecionado" : ""} ${chave === hoje ? "hoje" : ""}" data-data="${chave}" data-interativo="${interativo}" ${interativo ? "" : "disabled"}>
-            <span class="numero-dia">${data.getDate()}</span>${badges}
-            ${itens.length ? `<span class="ats-dia">${escaparHtml(ats)}</span>` : ""}
-        </button>`);
+        const interativo = itens.length > 0 || Boolean(feriado && !fora);
+        celulas.push(`<button type="button" class="dia-calendario ${fora ? "fora-mes" : ""} ${itens.length ? "com-agenda" : ""} ${feriado && !fora ? "dia-feriado" : ""} ${chave === dataAgendaSelecionada ? "selecionado" : ""} ${chave === hoje ? "hoje" : ""}" data-data="${chave}" data-interativo="${interativo}" ${interativo ? "" : "disabled"}><span class="numero-dia">${data.getDate()}</span>${badges}${itens.length ? `<span class="ats-dia">${escaparHtml(ats)}</span>` : ""}</button>`);
     }
 
     document.getElementById("calendario").innerHTML = celulas.join("");
-    document.querySelectorAll('.dia-calendario[data-interativo="true"]').forEach(botao =>
-        botao.addEventListener("click", () => selecionarDia(botao.dataset.data, mapa.get(botao.dataset.data) || [], feriados.get(botao.dataset.data) || null))
-    );
+    document.querySelectorAll('.dia-calendario[data-interativo="true"]').forEach(botao => {
+        botao.addEventListener("click", () => selecionarDia(botao.dataset.data, mapa.get(botao.dataset.data) || [], feriados.get(botao.dataset.data) || null));
+    });
 
     const feriadoSelecionado = feriados.get(dataAgendaSelecionada) || null;
-    const haFeriadoNoMes = [...feriados.values()].some(item =>
-        item.data.getFullYear() === ano && item.data.getMonth() === mes - 1
-    );
-
+    const haFeriadoNoMes = [...feriados.values()].some(item => item.data.getFullYear() === ano && item.data.getMonth() === mes - 1);
     if (!itensMes.length && !haFeriadoNoMes) {
         document.getElementById("tituloDetalheAgenda").textContent = "Nenhum caso";
         document.getElementById("listaAgenda").innerHTML = `<p class="estado-vazio">Nenhum caso dos status selecionados em ${escaparHtml(mesTitulo(ano, mes))}.</p>`;
@@ -371,26 +357,20 @@ function selecionarDia(chave, itens, feriado = null) {
     document.getElementById("tituloDetalheAgenda").textContent = `Ocorrências de ${dataBr(dataExcel(chave))}`;
     const ordem = { execucao: 1, agendado: 2, ok: 3 };
     const detalheFeriado = feriado ? `<article class="item-feriado"><span class="item-feriado-rotulo">Feriado</span><strong>${escaparHtml(feriado.nome)}</strong><span>${escaparHtml(feriado.abrangencia)}</span></article>` : "";
-    document.getElementById("listaAgenda").innerHTML = detalheFeriado + itens
-        .sort((a, b) => ordem[statusTipo(a)] - ordem[statusTipo(b)] || a.at.localeCompare(b.at))
+    const detalhes = [...itens]
+        .sort((a, b) => (ordem[statusTipo(a)] || 9) - (ordem[statusTipo(b)] || 9) || a.at.localeCompare(b.at, "pt-BR"))
         .map(item => {
             const tipoStatus = statusTipo(item);
             const rotulo = tipoStatus === "execucao" ? "EXECUÇÃO" : tipoStatus === "ok" ? "SERVIÇO OK" : "AGENDADO";
-            return `<article class="item-agenda item-${tipoStatus}">
-                <strong>${escaparHtml(item.at || "AT não informada")} · ${escaparHtml(item.tipo || "Tipo não informado")}</strong>
-                <span>Início: ${dataBr(item.dataInicio)} | Final: ${dataBr(item.dataFinal)}</span>
-                <span class="item-endereco"><strong>Endereço:</strong> ${escaparHtml(
-                    [item.endereco, item.numero].filter(Boolean).join(", ") || "Não informado"
-                )}</span>
-                <span class="status-detalhe">Status: ${rotulo}</span>
-                <span class="item-fibras">Fibras: <strong>${item.fibras ?? "Não informado"}</strong></span>
-            </article>`;
+            return `<article class="item-agenda item-${tipoStatus}"><strong>${escaparHtml(item.at || "AT não informada")} · ${escaparHtml(item.tipo || "Tipo não informado")}</strong><span>Início: ${dataBr(item.dataInicio)} | Final: ${dataBr(item.dataFinal)}</span><span class="item-endereco"><strong>Endereço:</strong> ${escaparHtml([item.endereco, item.numero].filter(Boolean).join(", ") || "Não informado")}</span><span class="status-detalhe">Status: ${rotulo}</span><span class="item-fibras">Fibras: <strong>${item.fibras ?? "Não informado"}</strong></span></article>`;
         }).join("");
+    document.getElementById("listaAgenda").innerHTML = detalheFeriado + (detalhes || '<p class="estado-vazio">Nenhuma ocorrência nesta data.</p>');
     atualizarAgenda();
 }
 
 function mudarMesAgenda(deslocamento) {
     const { ano, mes } = obterMesAgenda();
+    if (!ano || !mes) return;
     const nova = new Date(ano, mes - 1 + deslocamento, 1);
     document.getElementById("filtroMesAgenda").value = `${nova.getFullYear()}-${String(nova.getMonth() + 1).padStart(2, "0")}`;
     dataAgendaSelecionada = "";
@@ -411,19 +391,24 @@ function mostrarErro(mensagem) {
 
 async function iniciar() {
     try {
+        if (typeof XLSX === "undefined") throw new Error("A biblioteca XLSX não foi carregada.");
+        if (typeof Chart === "undefined") throw new Error("A biblioteca Chart.js não foi carregada.");
         const resposta = await fetch(CONFIG.arquivo, { cache: "no-store" });
         if (!resposta.ok) throw new Error(`Erro ${resposta.status} ao carregar ${CONFIG.arquivo}.`);
         const ultimaAtualizacao = resposta.headers.get("Last-Modified");
         document.getElementById("dataAtualizacao").textContent = ultimaAtualizacao ? new Date(ultimaAtualizacao).toLocaleString("pt-BR") : new Date().toLocaleString("pt-BR");
         const workbook = XLSX.read(await resposta.arrayBuffer(), { type: "array", cellDates: true });
         const aba = workbook.Sheets[CONFIG.aba];
-        if (!aba) throw new Error(`A aba ${CONFIG.aba} não foi encontrada.`);
+        if (!aba) throw new Error(`A aba "${CONFIG.aba}" não foi encontrada. Abas disponíveis: ${workbook.SheetNames.join(", ")}.`);
         registros = lerRegistros(aba);
+        if (!registros.length) throw new Error(`A aba "${CONFIG.aba}" foi encontrada, mas nenhum registro válido foi lido. Verifique os cabeçalhos e a linha inicial da tabela.`);
+        console.info("Plano Preventivo", { registros: registros.length, status: [...new Set(registros.map(item => item.status))], ats: [...new Set(registros.map(item => item.at))] });
         preencherFiltros();
         atualizarTudo();
     } catch (erro) {
         console.error(erro);
-        mostrarErro(`Não foi possível carregar o painel. Verifique a aba ${CONFIG.aba} no arquivo ${CONFIG.arquivo}.`);
+        mostrarErro(`Não foi possível carregar o painel: ${erro.message}`);
+        document.getElementById("dataAtualizacao").textContent = "Falha no carregamento";
     }
 }
 
@@ -433,15 +418,14 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("filtroMesAgenda").addEventListener("change", () => { dataAgendaSelecionada = ""; atualizarAgenda(); });
     document.getElementById("mesAnterior").addEventListener("click", () => mudarMesAgenda(-1));
     document.getElementById("mesSeguinte").addEventListener("click", () => mudarMesAgenda(1));
-    ["exibirAgendado", "exibirExecucao", "exibirServicoOk"].forEach(id =>
-        document.getElementById(id).addEventListener("change", () => {
-            dataAgendaSelecionada = "";
-            atualizarAgenda();
-        })
-    );
+    ["exibirAgendado", "exibirExecucao", "exibirServicoOk"].forEach(id => document.getElementById(id).addEventListener("change", () => { dataAgendaSelecionada = ""; atualizarAgenda(); }));
     document.getElementById("btnTelaCheia").addEventListener("click", async () => {
-        if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
-        else await document.exitFullscreen();
+        try {
+            if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
+            else await document.exitFullscreen();
+        } catch (erro) {
+            mostrarErro(`Não foi possível alternar a tela cheia: ${erro.message}`);
+        }
     });
     iniciar();
 });
