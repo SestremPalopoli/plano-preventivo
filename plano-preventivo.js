@@ -1,5 +1,5 @@
 const CONFIG = {
-    arquivo: "dados.xlsx",
+    arquivo: window.PLANO_PREVENTIVO_CONFIG?.arquivo || "/static/dados.xlsx",
     aba: "Acomp_Modernização"
 };
 
@@ -106,6 +106,7 @@ function statusTipo(item) {
     if (["AGENDADO", "AGENDADA"].includes(status)) return "agendado";
     if (["EXECUCAO", "EM EXECUCAO"].includes(status)) return "execucao";
     if (["SERVICO OK", "CONCLUIDO", "CONCLUIDA", "FINALIZADO", "FINALIZADA"].includes(status)) return "ok";
+    if (["CANCELADO", "CANCELADA"].includes(status)) return "cancelado";
     return "";
 }
 
@@ -259,11 +260,19 @@ function atualizarAgenda() {
         item => statusTipo(item) === "execucao"
     ).length;
 
+    const canceladosHoje = filtrados.filter(item =>
+        statusTipo(item) === "cancelado" &&
+        item.dataFinal &&
+        dataIso(item.dataFinal) === dataIso(hoje)
+    );
+
     document.getElementById("totalAgendaMes").textContent = String(agendadosMes.length);
     document.getElementById("legendaAgendaMes").textContent = mesTitulo(ano, mes);
     document.getElementById("totalAgendaHoje").textContent = String(agendadosHoje.length);
     document.getElementById("legendaAgendaHoje").textContent = dataBr(hoje);
     document.getElementById("totalExecucao").textContent = String(totalExecucao);
+    document.getElementById("totalCanceladosHoje").textContent = String(canceladosHoje.length);
+    document.getElementById("legendaCanceladosHoje").textContent = dataBr(hoje);
 
     montarCalendario(ano, mes, itensDoCalendario(ano, mes));
 }
