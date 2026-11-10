@@ -251,7 +251,9 @@ function atualizarAgenda() {
     const hoje = new Date();
     hoje.setHours(0, 0, 0, 0);
 
-    const agendadosHoje = agendados.filter(item => {
+    const agendaHoje = filtrados.filter(item => {
+        const tipo = statusTipo(item);
+        if (!["agendado", "execucao"].includes(tipo)) return false;
         const { inicio, fim } = intervaloItem(item);
         return inicio && fim && inicio <= hoje && fim >= hoje;
     });
@@ -268,7 +270,7 @@ function atualizarAgenda() {
 
     document.getElementById("totalAgendaMes").textContent = String(agendadosMes.length);
     document.getElementById("legendaAgendaMes").textContent = mesTitulo(ano, mes);
-    document.getElementById("totalAgendaHoje").textContent = String(agendadosHoje.length);
+    document.getElementById("totalAgendaHoje").textContent = String(agendaHoje.length);
     document.getElementById("legendaAgendaHoje").textContent = dataBr(hoje);
     document.getElementById("totalExecucao").textContent = String(totalExecucao);
     document.getElementById("totalCanceladosHoje").textContent = String(canceladosHoje.length);
@@ -372,17 +374,51 @@ function montarCalendario(ano, mes, itensMes) {
 
 function selecionarDia(chave, itens, feriado = null) {
     dataAgendaSelecionada = chave;
-    document.getElementById("tituloDetalheAgenda").textContent = `Ocorrências de ${dataBr(dataExcel(chave))}`;
-    const ordem = { execucao: 1, agendado: 2, ok: 3 };
-    const detalheFeriado = feriado ? `<article class="item-feriado"><span class="item-feriado-rotulo">Feriado</span><strong>${escaparHtml(feriado.nome)}</strong><span>${escaparHtml(feriado.abrangencia)}</span></article>` : "";
+
+    const rotulosStatus = {
+        agendado: "AGENDADO",
+        execucao: "EM EXECUÇÃO",
+        ok: "SERVIÇO OK",
+        cancelado: "CANCELADO"
+    };
+
+    const statusPresentes = [...new Set(
+        itens
+            .map(item => statusTipo(item))
+            .filter(tipo => rotulosStatus[tipo])
+    )];
+
+    let tituloStatus = "DETALHAMENTO";
+    if (statusPresentes.length === 1) {
+        tituloStatus = rotulosStatus[statusPresentes[0]];
+    } else if (statusPresentes.length > 1) {
+        tituloStatus = "MÚLTIPLOS STATUS";
+    } else if (feriado) {
+        tituloStatus = "FERIADO";
+    }
+
+    document.getElementById("tituloDetalheAgenda").textContent = tituloStatus;
+
+    const ordem = { execucao: 1, agendado: 2, ok: 3, cancelado: 4 };
+    const detalheFeriado = feriado
+        ? `<article class="item-feriado"><span class="item-feriado-rotulo">Feriado</span><strong>${escaparHtml(feriado.nome)}</strong><span>${escaparHtml(feriado.abrangencia)}</span></article>`
+        : "";
+
     const detalhes = [...itens]
-        .sort((a, b) => (ordem[statusTipo(a)] || 9) - (ordem[statusTipo(b)] || 9) || a.at.localeCompare(b.at, "pt-BR"))
+        .sort((a, b) =>
+            (ordem[statusTipo(a)] || 9) - (ordem[statusTipo(b)] || 9) ||
+            a.at.localeCompare(b.at, "pt-BR")
+        )
         .map(item => {
             const tipoStatus = statusTipo(item);
-            const rotulo = tipoStatus === "execucao" ? "EXECUÇÃO" : tipoStatus === "ok" ? "SERVIÇO OK" : "AGENDADO";
+            const rotulo = rotulosStatus[tipoStatus] || normalizarTexto(item.status) || "NÃO INFORMADO";
             return `<article class="item-agenda item-${tipoStatus}"><strong>${escaparHtml(item.at || "AT não informada")} · ${escaparHtml(item.tipo || "Tipo não informado")}</strong><span>Início: ${dataBr(item.dataInicio)} | Final: ${dataBr(item.dataFinal)}</span><span class="item-endereco"><strong>Endereço:</strong> ${escaparHtml([item.endereco, item.numero].filter(Boolean).join(", ") || "Não informado")}</span><span class="status-detalhe">Status: ${rotulo}</span><span class="item-fibras">Fibras: <strong>${item.fibras ?? "Não informado"}</strong></span></article>`;
         }).join("");
-    document.getElementById("listaAgenda").innerHTML = detalheFeriado + (detalhes || '<p class="estado-vazio">Nenhuma ocorrência nesta data.</p>');
+
+    document.getElementById("listaAgenda").innerHTML =
+        detalheFeriado +
+        (detalhes || '<p class="estado-vazio">Nenhuma ocorrência nesta data.</p>');
+
     atualizarAgenda();
 }
 
